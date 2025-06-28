@@ -1,10 +1,51 @@
-composer.phar
+# Dependencies
 /vendor/
-composer.lock
+/node_modules/
 
-# Commit your application's lock file https://getcomposer.org/doc/01-basic-usage.md#commit-your-composer-lock-file-to-version-control
-# You may choose to ignore a library lock file http://getcomposer.org/doc/02-libraries.md#lock-file
-# composer.lock
+# Environment
+.env
+.env.local
+.env.*.local
 
-# Test directory
-/test/
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+/storage/logs/*
+!/storage/logs/.gitkeep
+
+# Cache
+/storage/cache/*
+!/storage/cache/.gitkeep
+.phpunit.cache/
+.psalm-cache/
+
+# Coverage
+/coverage/
+*.coverage
+coverage.xml
+
+# Build
+/build/
+/dist/
+
+# Docker
+docker-compose.override.yml
+
+# Testing
+.phpunit.result.cache
+phpunit.xml
+
+# Security
+*.pem
+*.key
+*.crt

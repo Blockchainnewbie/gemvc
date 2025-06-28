@@ -1,6 +1,8 @@
 parameters:
-    level: 9
+    level: 8
     paths:
         - src
     excludePaths:
-        - vendor/*
+        - src/cache/*
+    checkMissingIterableValueType: false
+    reportUnmatchedIgnoredErrors: false

@@ -1,0 +1,199 @@
+version: '3.8'
+
+services:
+  # PHP Application with Swoole
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: development
+    container_name: gemvc_app
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=${DB_DATABASE:-gemvc}
+      - DB_USERNAME=${DB_USERNAME:-gemvc}
+      - DB_PASSWORD=${DB_PASSWORD:-secret}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SWOOLE_HTTP_HOST=0.0.0.0
+      - SWOOLE_HTTP_PORT=9501
+    ports:
+      - "9501:9501"
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - gemvc-network
+    command: php bin/swoole-server start
+
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: gemvc_mysql
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-rootpassword}
+      - MYSQL_DATABASE=${DB_DATABASE:-gemvc}
+      - MYSQL_USER=${DB_USERNAME:-gemvc}
+      - MYSQL_PASSWORD=${DB_PASSWORD:-secret}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d
+    networks:
+      - gemvc-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: gemvc_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - gemvc-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # PHPMyAdmin
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: gemvc_phpmyadmin
+    restart: unless-stopped
+    environment:
+      - PMA_HOST=mysql
+      - PMA_PORT=3306
+      - PMA_USER=${DB_USERNAME:-gemvc}
+      - PMA_PASSWORD=${DB_PASSWORD:-secret}
+      - UPLOAD_LIMIT=100M
+    ports:
+      - "8080:80"
+    depends_on:
+      - mysql
+    networks:
+      - gemvc-network
+
+  # Redis Commander
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: gemvc_redis_commander
+    restart: unless-stopped
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - gemvc-network
+
+  # Mailhog for Email Testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: gemvc_mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+    networks:
+      - gemvc-network
+
+  # Prometheus for Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: gemvc_prometheus
+    restart: unless-stopped
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    networks:
+      - gemvc-network
+
+  # Grafana for Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: gemvc_grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=redis-datasource
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    networks:
+      - gemvc-network
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: gemvc_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+      - ./docker/nginx/ssl:/etc/nginx/ssl
+      - ./public:/var/www/public
+    depends_on:
+      - app
+    networks:
+      - gemvc-network
+
+  # SonarQube for Code Quality
+  sonarqube:
+    image: sonarqube:community
+    container_name: gemvc_sonarqube
+    restart: unless-stopped
+    environment:
+      - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonarqube-data:/opt/sonarqube/data
+      - sonarqube-extensions:/opt/sonarqube/extensions
+      - sonarqube-logs:/opt/sonarqube/logs
+    networks:
+      - gemvc-network
+
+networks:
+  gemvc-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+  sonarqube-data:
+  sonarqube-extensions:
+  sonarqube-logs:
